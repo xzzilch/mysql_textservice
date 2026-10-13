@@ -21,12 +21,12 @@ HOST : {DB_HOST}
 
 ###############################Functions###############################
 
-def port():
+def port(ip='localhost'):
     while True:
         '''Query User for a port'''
         
         port = int(input('Port >') or 3306)
-        ps = portstatus(port)
+        ps = portstatus(port, ip)
         print(ps[1])
         
         if ps[0] == False:
