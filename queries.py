@@ -21,12 +21,12 @@ HOST : {DB_HOST}
 
 ###############################Functions###############################
 
-def port(ip='localhost'):
+def port(timeout= 1, ip='localhost'):
     while True:
         '''Query User for a port'''
         
         port = int(input('Port >') or 3306)
-        ps = portstatus(port, ip)
+        ps = portstatus(port, timeout, ip)
         print(ps[1])
         
         if ps[0] == False:
@@ -72,10 +72,11 @@ def exec(self, script = 'SELECT NULL AS null_set;'):
 def server_connection(t = ''):
     while True:
         try:   
+            h = host()
             print('Connect to server-----')
             o = mysql.connector.connect(
-                host = host(),
-                port = port(),
+                host = h,
+                port = port(h, 1),
                 user = uname(),
                 password = input('Enter password') or '',
                 database=t
