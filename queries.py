@@ -73,17 +73,19 @@ def server_connection(t = ''):
     while True:
         try:   
             h = host()
+            p = port(h, 1)
+            u = uname()
             print('Connect to server-----')
             o = mysql.connector.connect(
                 host = h,
-                port = port(h, 1),
-                user = uname(),
+                port = p,
+                user = u,
                 password = input('Enter password') or '',
                 database=t
             )
             print('----------------------')
             if o:
-                return o
+                return {'conn' : o, 'cursor' : o.cursor(), 'username' : u, 'port' : p, 'host' : h} 
         except mysql.connector.Error as e:
             print('-----------------------ERROR\n', str(e).rjust(3))
         except KeyboardInterrupt as k:
