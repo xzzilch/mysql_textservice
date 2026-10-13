@@ -95,11 +95,10 @@ last_message = 0
 
 def receive_messages():
     global last_message
-
+    db = database_connection()
+    cur = db.cursor()
     while True:
         try:
-            db = database_connection()
-            cur = db.cursor()
 
             cur.execute("""
             SELECT message_id, sender_id, message, sent_at
@@ -116,13 +115,15 @@ def receive_messages():
 
                 if sender_id != user_id:
                     print(f"\n{other}: {message}")
+            time.sleep(0.1)
 
-            db.close()
-            time.sleep(0.5)
+   
+            
 
         except Exception as e:
             print("\nConnection error:", e)
             time.sleep(2)
+     db.close()
 
 
 threading.Thread(target=receive_messages, daemon=True).start()
