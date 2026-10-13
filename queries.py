@@ -35,6 +35,7 @@ def port():
                 return 3306
             else:
                 continue
+        print('\n')
         return port
 #print(port(),rt)
 
