@@ -12,18 +12,28 @@ choice = input("> ")
 #REGISTRATION----------------------------------------------------------
 if choice == "2":
     try:
+        connection = server_connection('text_service_guest')
+        db = connection['conn']
+        cur = connection['cursor']
+        username = connection['username']
+        password = input('Once chance to enter password good luck')
         cur.execute(
             "INSERT INTO users (username, password) VALUES (%s, %s)",
             (username, password)
         )
         db.commit()
-        print("Account created.")
+        print("Account created.-----------\n")
+        
+        cur.close()
+        db.close()
     except mysql.connector.IntegrityError:
         print("Username already exists.")
         exit()
 #CONNECT---------------------------------------------------------------
-db = database_connection()
-cur = db.cursor()
+connection = server_connection('text_service')
+db = connection['conn']
+cur = connection['cursor']
+username = connection['username']
 print("Logged in as--------", username)
 
 #CONTACT---------------------------------------------------------------
@@ -35,45 +45,28 @@ cur.execute(
 
 result = cur.fetchone()
 
-if not result:
+if result:
+    print(f"Connecting to ------------ {other}")
+    other_id = result[0]
+else:
     print("  User does not exist.")
-
-other_id = result[0]
+    
 
 #GET_SESSION---------------------------------------------------------
-cur.execute("""
-SELECT session_id
-FROM sessions
-WHERE (user1_id=%s AND user2_id=%s)
-   OR (user1_id=%s AND user2_id=%s)
-LIMIT 1
-""", (user_id, other_id, other_id, user_id))
 
-result = cur.fetchone()
-
-if result:
-    session_id = result[0]
-else:
-    cur.execute(
-        "INSERT INTO sessions (user1_id, user2_id) VALUES (%s, %s)",
-        (user_id, other_id)
-    )
-    db.commit()
-    session_id = cur.lastrowid
-
-#db.close()
-
-print("\nConnected to", other)
-print("Type messages below. Ctrl+C to quit.\n")
+#later
 
 # ================= RECEIVE MESSAGES =================
 last_message = 0
+stop_signal = threading.Event()
 
-def receive_messages(cur):
+def receive_messages():
     global last_message
-    while True:
+    thread_conn = server_connection("text_service")
+    thread_cur = thread_conn["cursor"]
+    while not stop_signal.is_set():
         try:
-            cur.execute("""
+            thread_cur.execute("""
             SELECT message_id, sender_id, message, sent_at
             FROM messages
             WHERE session_id=%s
@@ -81,7 +74,7 @@ def receive_messages(cur):
             ORDER BY message_id
             """, (session_id, last_message))
 
-            rows = cur.fetchall()
+            rows = thread_cur.fetchall()
 
             for message_id, sender_id, message, sent_at in rows:
                 last_message = message_id
@@ -93,10 +86,11 @@ def receive_messages(cur):
         except Exception as e:
             print("\nConnection error:\n", e)
             time.sleep(2)
+    
+    thread_cur.close()
+    thread_conn["conn"].close()
 
-stop_signal = threading.Event()
-threading.Thread(target=receive_messages(cur), args = (cur,), daemon=True).start()
-
+threading.Thread(target=receive_messages, daemon=True).start()
 
 # ================= SEND MESSAGES =================
 try:
@@ -112,10 +106,10 @@ try:
         """, (session_id, user_id, message))
 except KeyboardInterrupt:
     stop_signal.set()
-    t.join(timeout=3)
     print("Exit SIGNAL---------")
     pass
 
 db.commit()
+cur.close()
 db.close()
 
