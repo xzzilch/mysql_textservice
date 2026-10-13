@@ -58,6 +58,14 @@ def host():
 #print(host(), rt)
 
 #_________________________________________________________________________
+def passw():
+    o = None
+    while not o:
+        o = input("password >")
+    return o
+#print(passw(), rt)
+
+#_________________________________________________________________________
 def exec(self, script = 'SELECT NULL AS null_set;'):
     try:
         self._connection.consume_results()
@@ -73,14 +81,19 @@ def server_connection(t = ''):
     while True:
         try:   
             h = host()
-            p = port(h, 1)
+            p = port(1, h)
             u = uname()
+            ps = passw()
+            if t == 'text_service_guest':
+                u = 'guest'
+                ps = ''
+
             print('Connect to server-----')
             o = mysql.connector.connect(
                 host = h,
                 port = p,
                 user = u,
-                password = input('Enter password') or '',
+                password = ps,
                 database=t
             )
             print('----------------------')
