@@ -5,10 +5,6 @@ from queries import *
 import sys
 
 #CONFIG -> queries module
-
-#CONNECT---------------------------------------------------------------
-db = database_connection()
-cur = db.cursor()
 #CLIENT_LOGIN---------------------------------------------------------
 print("1. Login")
 print("2. Register")
@@ -25,30 +21,13 @@ if choice == "2":
     except mysql.connector.IntegrityError:
         print("Username already exists.")
         exit()
-        
-#FETCH_USER-------------------------------------------------------------        
-cur.execute(
-    "SELECT user_id FROM users WHERE username=%s AND password=%s",
-    (username, password)
-)
-
-result = cur.fetchone()
-
-if not result:
-    print("Invalid username or password.")
-    exit()
-
-user_id = result[0]
-db.close()
-
-print("Logged in as", username)
-
-#CONTACT---------------------------------------------------------------
-other = input("Chat with user: ")
-
+#CONNECT---------------------------------------------------------------
 db = database_connection()
 cur = db.cursor()
+print("Logged in as--------", username)
 
+#CONTACT---------------------------------------------------------------
+other = input("  Chat with user: ")
 cur.execute(
     "SELECT user_id FROM users WHERE username=%s",
     (other,)
@@ -57,8 +36,7 @@ cur.execute(
 result = cur.fetchone()
 
 if not result:
-    print("User does not exist.")
-    exit()
+    print("  User does not exist.")
 
 other_id = result[0]
 
@@ -83,23 +61,18 @@ else:
     db.commit()
     session_id = cur.lastrowid
 
-db.close()
+#db.close()
 
 print("\nConnected to", other)
 print("Type messages below. Ctrl+C to quit.\n")
 
-
 # ================= RECEIVE MESSAGES =================
 last_message = 0
 
-
-def receive_messages():
+def receive_messages(cur):
     global last_message
-    db = database_connection()
-    cur = db.cursor()
     while True:
         try:
-
             cur.execute("""
             SELECT message_id, sender_id, message, sent_at
             FROM messages
@@ -117,34 +90,32 @@ def receive_messages():
                     print(f"\n{other}: {message}")
             time.sleep(0.1)
 
-   
-            
-
         except Exception as e:
-            print("\nConnection error:", e)
+            print("\nConnection error:\n", e)
             time.sleep(2)
-     db.close()
 
-
-threading.Thread(target=receive_messages, daemon=True).start()
+stop_signal = threading.Event()
+threading.Thread(target=receive_messages(cur), args = (cur,), daemon=True).start()
 
 
 # ================= SEND MESSAGES =================
+try:
+    while True:
+        message = input("> ")
+    
+        if not message:
+            continue
+    
+        cur.execute("""
+        INSERT INTO messages (session_id, sender_id, message)
+        VALUES (%s, %s, %s)
+        """, (session_id, user_id, message))
+except KeyboardInterrupt:
+    stop_signal.set()
+    t.join(timeout=3)
+    print("Exit SIGNAL---------")
+    pass
 
-while True:
-    message = input("> ")
-
-    if not message:
-        continue
-
-    db = database_connection()
-    cur = db.cursor()
-
-    cur.execute("""
-    INSERT INTO messages (session_id, sender_id, message)
-    VALUES (%s, %s, %s)
-    """, (session_id, user_id, message))
-
-    db.commit()
-    db.close()
+db.commit()
+db.close()
 
