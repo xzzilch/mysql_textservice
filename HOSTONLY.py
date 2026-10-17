@@ -1,18 +1,20 @@
-
-#from queries import *
+import sys
 import threading
 import time
+import mysql.connector as my
 from openports import *
 from queries import *
-import sys
-import mysql.connector as my
 
-#Create database and tables
-#HOSTONLY
+# Define your database name variable (or pull this from your json config!)
+DB_NAME = "my_text_service_db"
 
-#SCRIPTS--------------------------------------------------------
-script = '''
+# SCRIPTS--------------------------------------------------------
+# 1. Fixed AUTO_INCREMENT typo
+# 2. Added USE statement so tables are built in the correct DB
+# 3. Fixed column name mismatch in the Trigger (user_id instead of uuid)
+script_template = '''
 CREATE DATABASE IF NOT EXISTS {DB_NAME};
+USE {DB_NAME};
 
 CREATE TABLE IF NOT EXISTS users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -36,11 +38,12 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE TABLE IF NOT EXISTS guests (
-    uuid INT AUTO_INTCREMENT PRIMARY KEY,
+    uuid INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL
 );
 
+DROP USER IF EXISTS 'guest'@'%';
 CREATE USER 'guest'@'%';
 GRANT SELECT ON {DB_NAME}.guests TO 'guest'@'%';
 FLUSH PRIVILEGES;
@@ -53,29 +56,40 @@ BEGIN
         SIGNAL SQLSTATE '45000' 
         SET MESSAGE_TEXT = 'Error: Username is already taken!';
     ELSE
-        INSERT INTO users (uuid, username, password) 
+        INSERT INTO users (user_id, username, password) 
         VALUES (NEW.uuid, NEW.username, NEW.password);
     END IF;
-END
+END;
 '''
 
-#CONNECT-----------------------------------------------------------
-db = server_connection()
-try:
-    cur = db.cursor()
-except mysql.connector.Error as e:
-    print('------------------ERROR\n', str(e).rjust(3))
+# Dynamically swap {DB_NAME} placeholders using Python string format
+script = script_template.format(DB_NAME= "text_service")
 
-#CREATE_DB---------------------------------------------------------
+# CONNECT-----------------------------------------------------------
+conn = server_connection()
 try:
-    cur.execute(script, map_results = True)
+    cur = conn.cursor()
+except my.Error as e:
+    print('------------------ERROR\n', str(e).rjust(3))
+    sys.exit(1)  # Stop execution if cursor fails
+
+# CREATE_DB---------------------------------------------------------
+try:
+    # In version 9.2+, this handles the entire multi-statement string natively
+    cur.execute(script, map_results=True)
     
     for statement, result_set in cur.fetchsets():
         print(f"Executed: {statement}\n\n", result_set)
-except mysql.connector.Error as e:
-    print("Error -> ", e)
-        
-db.commit()
-db.close()
+    else:
+        # Commit moved INSIDE the success block
+        conn.commit()
+        print("SCHEMA CREATED SUCCESSFULLY")
+    
+except my.Error as e:
+    print("Error -> ", e, "\n\nRolling back...")
+    conn.rollback()
+    print("Done")
 
-#______________________________________________________________________________________________
+finally:
+    cur.close()
+    conn.close()
