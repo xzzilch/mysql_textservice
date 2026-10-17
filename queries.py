@@ -2,9 +2,11 @@
 #CAREFUL -FUNCTIONS HAVE VERTICAL_DEPENDENCE
 rt = '| RETURNED'
 import sys
+import os
 import mysql.connector
 import socket
 from openports import *
+import json
 
 
 
@@ -57,6 +59,20 @@ def passw():
     return o
 #print(passw(), rt)
 
+def sqlscript(sql_script = "text_service_schema.sql", json_cfg = "DB_METADATA"):
+    try:
+        sql_script = os.path.join(os.getcwd(), sql_script)
+        json_cfg = os.path.join(os.getcwd(), json_cfg)
+        
+        with open(json_cfg) as f:
+            cfg = json.load(f)
+            
+        with open(sql_script) as f:
+            return f.read().format(**cfg)
+            
+    except FileNotFoundError as e:
+        print("SQL script missing...\n", e)
+    
 #__________________________________________________________________________
 def server_connection(t = ''):
     while True:
