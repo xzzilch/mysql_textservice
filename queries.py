@@ -1,6 +1,6 @@
 #FUNCTIONS
 #CAREFUL -FUNCTIONS HAVE VERTICAL_DEPENDENCE
-rt = '| RETURNED'
+rt = '| RETURNED\n------------------\n END OF TEST'
 import sys
 import os
 import mysql.connector
@@ -12,6 +12,7 @@ import json
 
 ###############################Functions###############################
 
+#GET A OPEN PORT FROM USER______________________________________________________
 def port(timeout= 1, ip='localhost'):
     while True:
         try:
@@ -33,7 +34,7 @@ def port(timeout= 1, ip='localhost'):
             print("Enter numbers only " , e)
 #print(port(),rt)
 
-#________________________________________________________________________
+#GET USER NAME FROM USER_________________________________________________________
 def uname():
     '''Query User for a '''
     
@@ -43,7 +44,7 @@ def uname():
     return user        
 #print(uname(), rt)
 
-#_________________________________________________________________________
+#GET GOST ADDRESS FROM USER_____________________________________________________
 def host():
     o = None
     while not o:
@@ -51,7 +52,7 @@ def host():
     return o
 #print(host(), rt)
 
-#_________________________________________________________________________
+#GET PASSWORD FROM USER_________________________________________________________
 def passw():
     o = None
     while not o:
@@ -59,10 +60,12 @@ def passw():
     return o
 #print(passw(), rt)
 
-def sqlscript(sql_script = "text_service_schema.sql", json_cfg = "DB_METADATA"):
+#RUN SCRIPTS FROM CWD____________________________________________________________________
+def sqlscript(sql_script="text_service_schema.sql", json_cfg="DB_METADATA.json"):
     try:
-        sql_script = os.path.join(os.getcwd(), sql_script)
-        json_cfg = os.path.join(os.getcwd(), json_cfg)
+        # Use .lstrip("/") to prevent the absolute path slash trap we discussed
+        sql_script = os.path.join(os.getcwd(), sql_script.lstrip("/"))
+        json_cfg = os.path.join(os.getcwd(), json_cfg.lstrip("/"))
         
         with open(json_cfg) as f:
             cfg = json.load(f)
@@ -72,9 +75,11 @@ def sqlscript(sql_script = "text_service_schema.sql", json_cfg = "DB_METADATA"):
             
     except FileNotFoundError as e:
         print("SQL script missing...\n", e)
-    
-#__________________________________________________________________________
-def server_connection(t = ''):
+        return None # Explicitly return None if a load fails
+#print(sqlscript(), rt)
+
+#SERVER CONNECTION_______________________________________________________________________
+def server_connection(t=''):
     while True:
         try:   
             h = host()
@@ -86,13 +91,19 @@ def server_connection(t = ''):
                 ps = ''
 
             print('Connect to server-----')
-            o = mysql.connector.connect(
-                host = h,
-                port = p,
-                user = u,
-                password = ps,
-                database=t
-            )
+            
+            # Change: If database parameter 't' is empty, do NOT pass it to connector.
+            # This allows you to connect to raw MySQL to run a "CREATE DATABASE" query.
+            connect_kwargs = {
+                "host": h,
+                "port": p,
+                "user": u,
+                "password": ps
+            }
+            if t:
+                connect_kwargs["database"] = t
+
+            o = mysql.connector.connect(**connect_kwargs)
             print('----------------------')
             if o:
                 return o
@@ -100,6 +111,8 @@ def server_connection(t = ''):
             print('-----------------------ERROR\n', str(e).rjust(3))
         except KeyboardInterrupt as k:
             sys.exit('Exit Signal')
+#print(server_connection(), rt)
+
             
     
 
