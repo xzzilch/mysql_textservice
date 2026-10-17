@@ -6,18 +6,7 @@ import mysql.connector
 import socket
 from openports import *
 
-#Config--------------------------------------------------------------
-DB_PORT = 3306
-DB_NAME = "text_service"
-DB_HOST = 'localhost'
 
-print(f'''
-Defaults--------------
-PORT : {DB_PORT}
-HOST : {DB_HOST}
-----------------------
-''')
-#---------------------------------------------------------------------
 
 ###############################Functions###############################
 
