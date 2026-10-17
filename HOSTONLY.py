@@ -6,12 +6,9 @@ from openports import *
 from queries import *
 
 # Define your database name variable (or pull this from your json config!)
-DB_NAME = "my_text_service_db"
+DB_NAME = "text_service"
 
 # SCRIPTS--------------------------------------------------------
-# 1. Fixed AUTO_INCREMENT typo
-# 2. Added USE statement so tables are built in the correct DB
-# 3. Fixed column name mismatch in the Trigger (user_id instead of uuid)
 script_template = '''
 CREATE DATABASE IF NOT EXISTS {DB_NAME};
 USE {DB_NAME};
@@ -61,9 +58,6 @@ BEGIN
     END IF;
 END;
 '''
-
-# Dynamically swap {DB_NAME} placeholders using Python string format
-script = script_template.format(DB_NAME= "text_service")
 
 # CONNECT-----------------------------------------------------------
 conn = server_connection()
