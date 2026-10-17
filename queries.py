@@ -63,7 +63,6 @@ def passw():
 #RUN SCRIPTS FROM CWD____________________________________________________________________
 def sqlscript(sql_script="text_service_schema.sql", json_cfg="DB_METADATA.json"):
     try:
-        # Use .lstrip("/") to prevent the absolute path slash trap we discussed
         sql_script = os.path.join(os.getcwd(), sql_script.lstrip("/"))
         json_cfg = os.path.join(os.getcwd(), json_cfg.lstrip("/"))
         
@@ -75,7 +74,7 @@ def sqlscript(sql_script="text_service_schema.sql", json_cfg="DB_METADATA.json")
             
     except FileNotFoundError as e:
         print("SQL script missing...\n", e)
-        return None # Explicitly return None if a load fails
+        return None
 #print(sqlscript(), rt)
 
 #SERVER CONNECTION_______________________________________________________________________
@@ -92,7 +91,6 @@ def server_connection(t=''):
 
             print('Connect to server-----')
             
-            # Change: If database parameter 't' is empty, do NOT pass it to connector.
             # This allows you to connect to raw MySQL to run a "CREATE DATABASE" query.
             connect_kwargs = {
                 "host": h,
