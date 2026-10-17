@@ -23,20 +23,23 @@ HOST : {DB_HOST}
 
 def port(timeout= 1, ip='localhost'):
     while True:
-        '''Query User for a port'''
-        
-        port = int(input('Port >') or 3306)
-        ps = portstatus(port, timeout, ip)
-        print(ps[1])
-        
-        if ps[0] == False:
-            if input('Unable to connect retry? [y/n] > ') == 'n':
-                print('returning standard 3306')
-                return 3306
-            else:
-                continue
-        print('\n')
-        return port
+        try:
+            '''Query User for a port'''
+            
+            port = int(input('Port >') or 3306)
+            ps = portstatus(port, timeout, ip)
+            print(ps[1])
+            
+            if ps[0] == False:
+                if input('Unable to connect retry? [y/n] > ') == 'n':
+                    print('returning standard 3306')
+                    return 3306
+                else:
+                    continue
+            print('\n')
+            return port
+        except ValueError as e:
+            print("Enter numbers only " , e)
 #print(port(),rt)
 
 #________________________________________________________________________
@@ -65,17 +68,6 @@ def passw():
     return o
 #print(passw(), rt)
 
-#_________________________________________________________________________
-def exec(self, script = 'SELECT NULL AS null_set;'):
-    try:
-        self._connection.consume_results()
-        for curs in self.execute(script, multi=True):
-            print(curs.statement, '\nEXECUTED\n')
-            if curs.with_rows:
-                print(curs.fetchall())
-    except mysql.connector.Error as e:
-        print('ERROR ->\t', str(e).rjust(10))
-#exec()
 #__________________________________________________________________________
 def server_connection(t = ''):
     while True:
@@ -98,7 +90,7 @@ def server_connection(t = ''):
             )
             print('----------------------')
             if o:
-                return {'conn' : o, 'cursor' : o.cursor(), 'username' : u, 'port' : p, 'host' : h} 
+                return o
         except mysql.connector.Error as e:
             print('-----------------------ERROR\n', str(e).rjust(3))
         except KeyboardInterrupt as k:
