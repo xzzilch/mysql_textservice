@@ -67,7 +67,14 @@ except mysql.connector.Error as e:
     print('------------------ERROR\n', str(e).rjust(3))
 
 #CREATE_DB---------------------------------------------------------
-cur.execute(script)
+try:
+    cur.execute(script, map_results = True)
+    
+    for statement, result_set in cur.fetchsets():
+        print(f"Executed: {statement}\n\n", result_set)
+except mysql.connector.Error as e:
+    print("Error -> ", e)
+        
 db.commit()
 db.close()
 
