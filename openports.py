@@ -21,7 +21,6 @@ def localip():
 def portstatus(port, timeout=1.0, ip=None):
     '''Checks status of a port for a ip'''
     
-    # FIX: Dynamic fallback assignment prevents early static initialization bugs
     if ip is None:
         ip = localip()
         
@@ -33,16 +32,18 @@ def portstatus(port, timeout=1.0, ip=None):
         # connect_ex returns 0 if the connection was successful
         result = s.connect_ex((ip, port))
         if result == 0:
+            s.close()
             return True, f"{port} : OPEN"
         else:
             return False, f"{port} : CLOSED"
             
     except Exception as e:
         print(f"Error checking {ip}:{port} -> {e}")
-        # FIX: Returns a uniform tuple format to prevent index errors in caller scripts
         return False, f"{port} : ERROR"
         
     finally:
-        # Always close the socket connection
-        s.close()
+        try:
+            s.close()
+        except Exception:
+            pass
 #print(portstatus(80))
