@@ -3,13 +3,13 @@ import time
 import mysql.connector as my
 from openports import *
 from chat_functions import *  # Contains your server_connection and sqlscript definitions
-
-# Define your database name variable (or pull this from your json config!)
+'''
+{DEPRACATED}
+Define your database name variable (or pull this from your json config!)
 DB_NAME = "text_service"
-
+'''
 # SCRIPTS--------------------------------------------------------
-# Read dynamic multi-statement parameters out of local config files
-script_payload = sqlscript(sql_script="text_service_schema.sql", json_cfg="DB_METADATA.json")
+script_payload = sqlscript(sql_script="text_service_schema.sql", json_cfg=None)
 
 if not script_payload:
     print("Schema installation terminated: SQL script source string empty.")
@@ -32,9 +32,8 @@ try:
     
     # Loop through the modern generator returning (statement, result_set) tuples
     for statement, result_set in cur.fetchsets():
-        # Flush each underlying statement result out of the pipeline buffer
-        if result_set:
-            pass
+        if result_set and result_set.with_rows:
+            result_set.fetchall()
             
     # Commit moved INSIDE the success block
     conn.commit()
