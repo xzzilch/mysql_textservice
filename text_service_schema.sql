@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_id INT NOT NULL,   
     receiver_id INT NOT NULL, 
     body_text TEXT NOT NULL,                  
-    dispatched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+    dispatched_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6), 
     FOREIGN KEY (sender_id) REFERENCES users(user_id),
     FOREIGN KEY (receiver_id) REFERENCES users(user_id)
 );
