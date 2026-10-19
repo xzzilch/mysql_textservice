@@ -70,13 +70,18 @@ def passw():
 def sqlscript(sql_script="text_service_schema.sql", json_cfg="DB_METADATA.json"):
     try:
         sql_script = os.path.join(os.getcwd(), sql_script.lstrip("/"))
-        json_cfg = os.path.join(os.getcwd(), json_cfg.lstrip("/"))
         
-        with open(json_cfg) as f:
-            cfg = json.load(f)
-            
-        with open(sql_script) as f:
-            return f.read().format(**cfg)
+        # Only attempt to read metadata and format if a template configuration string is explicitly given
+        if json_cfg:
+            json_cfg = os.path.join(os.getcwd(), json_cfg.lstrip("/"))
+            with open(json_cfg) as f:
+                cfg = json.load(f)
+            with open(sql_script) as f:
+                return f.read().format(**cfg)
+        else:
+            # If json_cfg is None or empty, skip formatting entirely
+            with open(sql_script) as f:
+                return f.read()
             
     except FileNotFoundError as e:
         print("SQL script missing...\n", e)
