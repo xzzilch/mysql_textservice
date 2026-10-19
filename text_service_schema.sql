@@ -1,219 +1,244 @@
-#FUNCTIONS
-#CAREFUL -FUNCTIONS HAVE VERTICAL_DEPENDENCE
-rt = '| RETURNED\n------------------\n END OF TEST'
-import sys
-import os
-import mysql.connector
-import socket
-from openports import *
-import json
+CREATE DATABASE IF NOT EXISTS text_service_db;
+USE text_service_db;
 
-DB_CONFIG = {
-    'host': 'localhost',
-    'user': 'client_user',
-    'password': 'AppSecureAccessPass2026!',
-    'database': 'text_service_db'
-}
+-- =========================================================================
+-- 1. BASE MASTER TABLES & PUBLIC PRESENTATION VIEWS
+-- =========================================================================
 
-###############################Functions###############################
+CREATE TABLE IF NOT EXISTS users (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    phone_number VARCHAR(20) UNIQUE DEFAULT NULL, 
+    password VARCHAR(255) NOT NULL,
+    status ENUM('ONLINE', 'OFFLINE') DEFAULT 'OFFLINE'
+);
 
-#GET A OPEN PORT FROM USER______________________________________________________
-def port(timeout= 1, ip='localhost'):
-    while True:
-        try:
-            '''Query User for a port'''
-            
-            val = input('Port >')
-            port = int(val) if val else 3306
-            ps = portstatus(port, timeout, ip)
-            print(ps)
-            
-            if ps == False:
-                if input('Unable to connect retry? [y/n] > ') == 'n':
-                    print('returning standard 3306')
-                    return 3306
-                else:
-                    continue
-            print('\n')
-            return port
-        except ValueError as e:
-            print("Enter numbers only " , e)
-#print(port(),rt)
+CREATE OR REPLACE VIEW public_users AS
+SELECT 
+    user_id,
+    username,
+    phone_number,
+    status
+FROM users;
 
-#GET USER NAME FROM USER_________________________________________________________
-def uname():
-    '''Query User for a '''
+-- =========================================================================
+-- 2. RELATION TABLES (MUTUAL CONTACT LINKS)
+-- =========================================================================
+
+CREATE TABLE IF NOT EXISTS contact_relations (
+    user1_id INT NOT NULL, 
+    user2_id INT NOT NULL,
+    PRIMARY KEY (user1_id, user2_id),
+    FOREIGN KEY (user1_id) REFERENCES users(user_id), 
+    FOREIGN KEY (user2_id) REFERENCES users(user_id),
+    CHECK (user1_id < user2_id)
+);
+
+-- =========================================================================
+-- 3. CHAT LOGGER STORAGE
+-- =========================================================================
+
+CREATE TABLE IF NOT EXISTS messages (
+    text_id INT AUTO_INCREMENT PRIMARY KEY,
+    sender_id INT NOT NULL,   
+    receiver_id INT NOT NULL, 
+    body_text TEXT NOT NULL,                  
+    dispatched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+    FOREIGN KEY (sender_id) REFERENCES users(user_id),
+    FOREIGN KEY (receiver_id) REFERENCES users(user_id)
+);
+
+-- Optimal index routing for concurrent network queries
+CREATE INDEX idx_msg_routing ON messages (sender_id, receiver_id, dispatched_at);
+
+-- =========================================================================
+-- 4. FIREWALL UTILITIES & AUTH PROCEDURES
+-- =========================================================================
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS VerifySession //
+CREATE PROCEDURE VerifySession()
+BEGIN
+    -- Intercepts pipeline memory room. If empty, drops request instantly.
+    IF @current_authenticated_user_id IS NULL THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Access Denied: Session unauthorized. Please log in first.';
+    END IF;
+END //
+
+DROP PROCEDURE IF EXISTS RegisterUser //
+CREATE PROCEDURE RegisterUser(
+    IN guest_username VARCHAR(50),
+    IN guest_phone_number VARCHAR(20),
+    IN guest_password VARCHAR(255)
+)
+SQL SECURITY DEFINER
+BEGIN
+    INSERT INTO users (username, phone_number, password)
+    VALUES (guest_username, guest_phone_number, guest_password);
+END //
+
+DROP PROCEDURE IF EXISTS UserLogin //
+CREATE PROCEDURE UserLogin(
+    IN p_username VARCHAR(50),
+    IN p_password VARCHAR(255)
+)
+BEGIN
+    SET @found_id = NULL;
+
+    SELECT user_id INTO @found_id 
+    FROM users 
+    WHERE username = p_username 
+      AND password = p_password;
+
+    IF @found_id IS NULL THEN
+        SET @current_authenticated_user_id = NULL;
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Authentication Failed: Invalid username or password.';
+    ELSE
+        SET @current_authenticated_user_id = @found_id;
+        UPDATE users SET status = 'ONLINE' WHERE user_id = @found_id;
+        SELECT 'Login Successful!' AS status;
+    END IF;
+END //
+
+DROP PROCEDURE IF EXISTS UserLogout //
+CREATE PROCEDURE UserLogout()
+BEGIN
+    IF @current_authenticated_user_id IS NOT NULL THEN
+        UPDATE users SET status = 'OFFLINE' WHERE user_id = @current_authenticated_user_id;
+        SET @current_authenticated_user_id = NULL;
+        SELECT 'Logout Successful!' AS status;
+    ELSE
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Error: You are not logged in.';
+    END IF;
+END //
+
+-- =========================================================================
+-- 5. TEXT SERVICES & APP OPERATIONS (REFACTORED WITH CLEAN FIREWALL)
+-- =========================================================================
+
+DROP PROCEDURE IF EXISTS StreamNewTexts //
+CREATE PROCEDURE StreamNewTexts(
+    IN target_contact_username VARCHAR(50),
+    IN last_timestamp TIMESTAMP
+)
+SQL SECURITY DEFINER
+BEGIN
+    CALL VerifySession(); -- 🛡️ Interceptor checks pipeline memory
+
+    SET @target_id = (SELECT user_id FROM users WHERE username = target_contact_username);
+
+    SELECT 
+        m.text_id,
+        u.username AS sender_username,
+        m.body_text,
+        m.dispatched_at
+    FROM messages m
+    JOIN users u ON m.sender_id = u.user_id
+    WHERE ((m.sender_id = @current_authenticated_user_id AND m.receiver_id = @target_id)
+       OR (m.sender_id = @target_id AND m.receiver_id = @current_authenticated_user_id))
+      AND m.dispatched_at > last_timestamp
+    ORDER BY m.dispatched_at ASC;
+END //
+
+DROP PROCEDURE IF EXISTS SendText //
+CREATE PROCEDURE SendText(
+    IN input_receiver_username VARCHAR(50),
+    IN input_body_text TEXT
+)
+SQL SECURITY DEFINER
+BEGIN
+    CALL VerifySession(); -- 🛡️ Interceptor checks pipeline memory
+
+    SET @rec_id = (SELECT user_id FROM users WHERE username = input_receiver_username);
+
+    IF @rec_id IS NULL THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Error: The recipient username does not exist.';
+    END IF;
+
+    INSERT INTO messages (sender_id, receiver_id, body_text)
+    VALUES (@current_authenticated_user_id, @rec_id, input_body_text);
+END //
+
+DROP PROCEDURE IF EXISTS AddContactRelation //
+CREATE PROCEDURE AddContactRelation(
+    IN target_username VARCHAR(50)
+)
+SQL SECURITY DEFINER
+BEGIN
+    CALL VerifySession(); -- 🛡️ Interceptor checks pipeline memory
+
+    SET @target_id = (SELECT user_id FROM users WHERE username = target_username);
     
-    user = None
-    while not user:
-        user = input("Username: ")
-    return user        
-#print(uname(), rt)
+    IF @target_id IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Error: Target user does not exist.';
+    END IF;
 
-#GET GOST ADDRESS FROM USER_____________________________________________________
-def host():
-    o = None
-    while not o:
-        o = input("hostip >")
-    return o
-#print(host(), rt)
+    INSERT IGNORE INTO contact_relations (user1_id, user2_id)
+    VALUES (LEAST(@current_authenticated_user_id, @target_id), GREATEST(@current_authenticated_user_id, @target_id));
+END //
 
-#GET PASSWORD FROM USER_________________________________________________________
-def passw():
-    o = None
-    while not o:
-        o = input("password >")
-    return o
-#print(passw(), rt)
+DROP PROCEDURE IF EXISTS GetContactList //
+CREATE PROCEDURE GetContactList()
+SQL SECURITY DEFINER
+BEGIN
+    CALL VerifySession(); -- 🛡️ Interceptor checks pipeline memory
 
-#RUN SCRIPTS FROM CWD____________________________________________________________________
-def sqlscript(sql_script="text_service_schema.sql", json_cfg="DB_METADATA.json"):
-    try:
-        sql_script = os.path.join(os.getcwd(), sql_script.lstrip("/"))
-        json_cfg = os.path.join(os.getcwd(), json_cfg.lstrip("/"))
-        
-        with open(json_cfg) as f:
-            cfg = json.load(f)
-            
-        with open(sql_script) as f:
-            return f.read().format(**cfg)
-            
-    except FileNotFoundError as e:
-        print("SQL script missing...\n", e)
-        return None
-#print(sqlscript(), rt)
+    SELECT u.user_id, u.username, u.status
+    FROM contact_relations cr
+    JOIN users u ON cr.user2_id = u.user_id
+    WHERE cr.user1_id = @current_authenticated_user_id
+    
+    UNION ALL
+    
+    SELECT u.user_id, u.username, u.status
+    FROM contact_relations cr
+    JOIN users u ON cr.user1_id = u.user_id
+    WHERE cr.user2_id = @current_authenticated_user_id;
+END //
 
-#SERVER CONNECTION_______________________________________________________________________
-def server_connection(t=''):
-    while True:
-        try:   
-            h = host()
-            p = port(1, h)
-            u = uname()
-            ps = passw()
-            if t == 'text_service' or t == 'text_service_guest':
-                u = 'client_user'
-                ps = 'AppSecureAccessPass2026!'
-                t = 'text_service_db'
+DROP PROCEDURE IF EXISTS SearchContact //
+CREATE PROCEDURE SearchContact(
+    IN user_name VARCHAR(50)
+)
+SQL SECURITY DEFINER
+BEGIN
+    CALL VerifySession(); -- 🛡️ Interceptor checks pipeline memory
 
-            print('Connect to server-----')
-            
-            connect_kwargs = {
-                "host": h,
-                "port": p,
-                "user": u,
-                "password": ps
-            }
-            if t:
-                connect_kwargs["database"] = t
+    SELECT user_id, username, status
+    FROM public_users
+    WHERE username = user_name;
+END //
 
-            o = mysql.connector.connect(**connect_kwargs)
-            print('----------------------')
-            if o:
-                return o
-        except mysql.connector.Error as e:
-            print('-----------------------ERROR\n', str(e).rjust(3))
-            if input('Retry database connection? [y/n] > ') == 'n':
-                return None
-        except KeyboardInterrupt as k:
-            sys.exit('Exit Signal')
-#print(server_connection(), rt)
+DELIMITER ;
 
-#GET OPERATIONAL DB CONNECTION FROM CONFIG______________________________________________
-def get_conn():
-    return mysql.connector.connect(**DB_CONFIG)
+-- =========================================================================
+-- 6. SYSTEM PRIVILEGES & GLOBAL PIPELINE SECURITY
+-- =========================================================================
 
-#REGISTER NEW PROFILE IN SYSTEM_________________________________________________________
-def reg_user(user, phone, pwd):
-    conn = get_conn()
-    cursor = conn.cursor()
-    try:
-        cursor.callproc('RegisterUser', [user, phone, pwd])
-        conn.commit()
-        print(f" Registered user: {user}")
-        return True
-    except mysql.connector.Error as err:
-        print(f"❌ Registration failed for {user}: {err}")
-        return False
-    finally:
-        cursor.close()
-        conn.close()
+-- Standardise user account setup
+CREATE USER IF NOT EXISTS 'client_user'@'%';
+ALTER USER 'client_user'@'%' IDENTIFIED BY 'AppSecureAccessPass2026!';
 
-#AUTHENTICATE USER AND ACQUIRE ACTIVE SESSION CONTEXT___________________________________
-def login(user, pwd):
-    conn = get_conn()
-    cursor = conn.cursor(dictionary=True)
-    try:
-        cursor.callproc('UserLogin', [user, pwd])
-        for res in cursor.stored_results():
-            row = res.fetchone()
-            if row and 'Login Successful!' in row.values():
-                print(f"🔓 {user} logged in successfully.")
-                return conn, cursor
-        print(f"❌ Login failed for {user}: Invalid credentials.")
-        conn.close()
-        return None, None
-    except mysql.connector.Error as err:
-        print(f"❌ Login error for {user}: {err}")
-        if conn.is_connected():
-            conn.close()
-        return None, None
+-- Clean baseline execution box
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'client_user'@'%';
 
-#TERMINATE LOGGED IN SESSION AND CLOSE ASSETS___________________________________________
-def logout(conn, cursor):
-    if not conn or not conn.is_connected():
-        return
-    try:
-        cursor.callproc('UserLogout')
-        conn.commit()
-        print("🔒 Logged out successfully.")
-    except mysql.connector.Error as err:
-        print(f"❌ Logout error: {err}")
-    finally:
-        cursor.close()
-        conn.close()
+-- Safely expose execution boundaries only
+GRANT EXECUTE ON PROCEDURE text_service_db.RegisterUser TO 'client_user'@'%';
+GRANT EXECUTE ON PROCEDURE text_service_db.UserLogin TO 'client_user'@'%';
+GRANT EXECUTE ON PROCEDURE text_service_db.UserLogout TO 'client_user'@'%';
+GRANT EXECUTE ON PROCEDURE text_service_db.StreamNewTexts TO 'client_user'@'%';
+GRANT EXECUTE ON PROCEDURE text_service_db.SendText TO 'client_user'@'%';
+GRANT EXECUTE ON PROCEDURE text_service_db.AddContactRelation TO 'client_user'@'%';
+GRANT EXECUTE ON PROCEDURE text_service_db.GetContactList TO 'client_user'@'%';
+GRANT EXECUTE ON PROCEDURE text_service_db.SearchContact TO 'client_user'@'%';
 
-#DISPATCH TEXT MESSAGE INTERACTION OVER SECURED LINE___________________________________
-def send_txt(cursor, conn, receiver, text):
-    try:
-        cursor.callproc('SendText', [receiver, text])
-        conn.commit()
-        print(f"📩 Sent to {receiver}: '{text}'")
-        return True
-    except mysql.connector.Error as err:
-        print(f"❌ Failed to send text to {receiver}: {err}")
-        return False
+-- Open access strictly to the password-free visual wrapper
+GRANT SELECT ON text_service_db.public_users TO 'client_user'@'%';
 
-#STREAM EXCHANGE FEED BETWEEN USERS SINCE HISTORICAL POINT______________________________
-def stream_txts(cursor, target, timestamp):
-    logs = []
-    try:
-        cursor.callproc('StreamNewTexts', [target, timestamp])
-        for res in cursor.stored_results():
-            logs.extend(res.fetchall())
-        return logs
-    except mysql.connector.Error as err:
-        return []
-
-#ADD MUTUAL LINK CONTACT RELATION MATRIX________________________________________________
-def add_contact(cursor, conn, target):
-    try:
-        cursor.callproc('AddContactRelation', [target])
-        conn.commit()
-        print(f"🔗 Added {target} to contacts.")
-        return True
-    except mysql.connector.Error as err:
-        print(f"❌ Failed to add contact {target}: {err}")
-        return False
-
-#SEARCH PUBLIC USERS TO VERIFY PROFILE RECORD___________________________________________
-def search_contact(cursor, target):
-    try:
-        cursor.callproc('SearchContact', [target])
-        for res in cursor.stored_results():
-            row = res.fetchone()
-            if row:
-                return row
-        return None
-    except mysql.connector.Error:
-        return None
+FLUSH PRIVILEGES;
