@@ -1,4 +1,6 @@
 import socket
+
+#_______________________________________________________________________
 def localip():
     '''Gets local ip'''
     
@@ -16,9 +18,13 @@ def localip():
 
 
 #_______________________________________________________________________
-def portstatus(port, timeout=1.0, ip = localip()):
+def portstatus(port, timeout=1.0, ip=None):
     '''Checks status of a port for a ip'''
     
+    # FIX: Dynamic fallback assignment prevents early static initialization bugs
+    if ip is None:
+        ip = localip()
+        
     # a TCP socket
     # AF_INET = IPv4, SOCK_STREAM = TCP
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -33,13 +39,10 @@ def portstatus(port, timeout=1.0, ip = localip()):
             
     except Exception as e:
         print(f"Error checking {ip}:{port} -> {e}")
-        return False
+        # FIX: Returns a uniform tuple format to prevent index errors in caller scripts
+        return False, f"{port} : ERROR"
         
     finally:
         # Always close the socket connection
         s.close()
 #print(portstatus(80))
-
-
-
-
