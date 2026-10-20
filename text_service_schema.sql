@@ -1,5 +1,6 @@
-CREATE DATABASE IF NOT EXISTS text_service_db;
-USE text_service_db;
+DROP DATABASE IF EXISTS text_service
+CREATE DATABASE IF NOT EXISTS text_service;
+USE text_service;
 
 -- =========================================================================
 -- 1. BASE MASTER TABLES & PUBLIC PRESENTATION VIEWS
@@ -55,9 +56,6 @@ CREATE INDEX idx_msg_routing ON messages (sender_id, receiver_id, dispatched_at)
 -- 4. FIREWALL UTILITIES & AUTH PROCEDURES
 -- =========================================================================
 
-DELIMITER //
-
-DROP PROCEDURE IF EXISTS VerifySession //
 CREATE PROCEDURE VerifySession()
 BEGIN
     -- Intercepts pipeline memory room. If empty, drops request instantly.
@@ -65,9 +63,8 @@ BEGIN
         SIGNAL SQLSTATE '45000' 
         SET MESSAGE_TEXT = 'Access Denied: Session unauthorized. Please log in first.';
     END IF;
-END //
+END;
 
-DROP PROCEDURE IF EXISTS RegisterUser //
 CREATE PROCEDURE RegisterUser(
     IN guest_username VARCHAR(50),
     IN guest_phone_number VARCHAR(20),
@@ -77,9 +74,8 @@ SQL SECURITY DEFINER
 BEGIN
     INSERT INTO users (username, phone_number, password)
     VALUES (guest_username, guest_phone_number, guest_password);
-END //
+END;
 
-DROP PROCEDURE IF EXISTS UserLogin //
 CREATE PROCEDURE UserLogin(
     IN p_username VARCHAR(50),
     IN p_password VARCHAR(255)
@@ -101,9 +97,8 @@ BEGIN
         UPDATE users SET status = 'ONLINE' WHERE user_id = @found_id;
         SELECT 'Login Successful!' AS status;
     END IF;
-END //
+END;
 
-DROP PROCEDURE IF EXISTS UserLogout //
 CREATE PROCEDURE UserLogout()
 BEGIN
     IF @current_authenticated_user_id IS NOT NULL THEN
@@ -114,13 +109,12 @@ BEGIN
         SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Error: You are not logged in.';
     END IF;
-END //
+END;
 
 -- =========================================================================
 -- 5. TEXT SERVICES & APP OPERATIONS (REFACTORED WITH CLEAN FIREWALL)
 -- =========================================================================
 
-DROP PROCEDURE IF EXISTS StreamNewTexts //
 CREATE PROCEDURE StreamNewTexts(
     IN target_contact_username VARCHAR(50),
     IN last_timestamp TIMESTAMP
@@ -142,9 +136,8 @@ BEGIN
        OR (m.sender_id = @target_id AND m.receiver_id = @current_authenticated_user_id))
       AND m.dispatched_at > last_timestamp
     ORDER BY m.dispatched_at ASC;
-END //
+END;
 
-DROP PROCEDURE IF EXISTS SendText //
 CREATE PROCEDURE SendText(
     IN input_receiver_username VARCHAR(50),
     IN input_body_text TEXT
@@ -162,9 +155,8 @@ BEGIN
 
     INSERT INTO messages (sender_id, receiver_id, body_text)
     VALUES (@current_authenticated_user_id, @rec_id, input_body_text);
-END //
+END;
 
-DROP PROCEDURE IF EXISTS AddContactRelation //
 CREATE PROCEDURE AddContactRelation(
     IN target_username VARCHAR(50)
 )
@@ -181,9 +173,8 @@ BEGIN
 
     INSERT IGNORE INTO contact_relations (user1_id, user2_id)
     VALUES (LEAST(@current_authenticated_user_id, @target_id), GREATEST(@current_authenticated_user_id, @target_id));
-END //
+END;
 
-DROP PROCEDURE IF EXISTS GetContactList //
 CREATE PROCEDURE GetContactList()
 SQL SECURITY DEFINER
 BEGIN
@@ -200,9 +191,8 @@ BEGIN
     FROM contact_relations cr
     JOIN users u ON cr.user1_id = u.user_id
     WHERE cr.user2_id = @current_authenticated_user_id;
-END //
+END;
 
-DROP PROCEDURE IF EXISTS SearchContact //
 CREATE PROCEDURE SearchContact(
     IN user_name VARCHAR(50)
 )
@@ -213,9 +203,7 @@ BEGIN
     SELECT user_id, username, status
     FROM public_users
     WHERE username = user_name;
-END //
-
-DELIMITER ;
+END;
 
 -- =========================================================================
 -- 6. SYSTEM PRIVILEGES & GLOBAL PIPELINE SECURITY
