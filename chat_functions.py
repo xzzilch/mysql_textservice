@@ -76,11 +76,11 @@ def sqlscript(sql_script="text_service_schema.sql", json_cfg="DB_METADATA.json")
             json_cfg = os.path.join(os.getcwd(), json_cfg.lstrip("/"))
             with open(json_cfg) as f:
                 cfg = json.load(f)
-            with open(sql_script) as f:
+            with open(sql_script, encoding = 'utf-8') as f:
                 return f.read().format(**cfg)
         else:
             # If json_cfg is None or empty, skip formatting entirely
-            with open(sql_script) as f:
+            with open(sql_script, encoding = 'utf-8') as f:
                 return f.read()
             
     except FileNotFoundError as e:
@@ -129,11 +129,11 @@ def get_conn():
     return mysql.connector.connect(**DB_CONFIG)
 
 #REGISTER NEW PROFILE IN SYSTEM_________________________________________________________
-def reg_user(user, phone, pwd):
+def reg_user(user, pwd):
     conn = get_conn()
     cursor = conn.cursor()
     try:
-        cursor.callproc('RegisterUser', [user, phone, pwd])
+        cursor.callproc('RegisterUser', [user, 0, pwd])
         conn.commit()
         print(f" Registered user: {user}")
         return True
