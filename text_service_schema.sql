@@ -76,10 +76,12 @@ BEGIN
     VALUES (guest_username, guest_phone_number, guest_password);
 END;
 
+--USER LOGIN
 CREATE PROCEDURE UserLogin(
     IN p_username VARCHAR(50),
     IN p_password VARCHAR(255)
 )
+SQL SECURITY DEFINER
 BEGIN
     SET @found_id = NULL;
 
@@ -99,6 +101,7 @@ BEGIN
     END IF;
 END;
 
+--USER LOGOUT
 CREATE PROCEDURE UserLogout()
 BEGIN
     IF @current_authenticated_user_id IS NOT NULL THEN
@@ -138,6 +141,7 @@ BEGIN
     ORDER BY m.dispatched_at ASC;
 END;
 
+--SEND TEXT
 CREATE PROCEDURE SendText(
     IN input_receiver_username VARCHAR(50),
     IN input_body_text TEXT
@@ -157,6 +161,7 @@ BEGIN
     VALUES (@current_authenticated_user_id, @rec_id, input_body_text);
 END;
 
+--ADD CONTACT
 CREATE PROCEDURE AddContactRelation(
     IN target_username VARCHAR(50)
 )
@@ -175,6 +180,7 @@ BEGIN
     VALUES (LEAST(@current_authenticated_user_id, @target_id), GREATEST(@current_authenticated_user_id, @target_id));
 END;
 
+--
 CREATE PROCEDURE GetContactList()
 SQL SECURITY DEFINER
 BEGIN
@@ -193,6 +199,7 @@ BEGIN
     WHERE cr.user2_id = @current_authenticated_user_id;
 END;
 
+--
 CREATE PROCEDURE SearchContact(
     IN user_name VARCHAR(50)
 )
@@ -211,7 +218,7 @@ END;
 
 -- Standardise user account setup
 CREATE USER IF NOT EXISTS 'client_user'@'%';
-ALTER USER 'client_user'@'%' IDENTIFIED BY 'AppSecureAccessPass2026!';
+ALTER USER 'client_user'@'%';
 
 -- Clean baseline execution box
 REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'client_user'@'%';
